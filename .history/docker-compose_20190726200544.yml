@@ -1,0 +1,71 @@
+version: '2'
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/www/projects:/var/www/html
+      - ./conf/nginx:/etc/nginx/conf.d
+      - ./conf/ambiente/hosts:/etc/hosts
+    depends_on:
+      - php73
+    links:
+      - database
+    networks:
+      app_network:
+        ipv4_address: 192.159.0.10
+    container_name: nginx
+  database:
+    image: mysql:5.6
+    container_name: database
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      app_network:
+        ipv4_address: 192.159.0.11
+    command: mysqld --sql_mode='' --max_allowed_packet=512M --innodb_buffer_pool_size=512M --innodb_flush_log_at_trx_commit=0
+  php73:
+    build: ./dockerfiles/php-7.3
+    container_name: php73
+    volumes:
+    - /var/www/projects:/var/www/html
+    - ./conf/composer:/root/.composer
+    - ./conf/php/php-dev.ini:/usr/local/etc/php/php.ini
+    - ./conf/ambiente/hosts:/etc/hosts
+    working_dir: /var/www/html/app
+    environment:
+    - PHP_IDE_CONFIG=serverName=docker
+    - APPLICATION_ENV=dev
+    expose:
+    - 9000
+    ports:
+    - 9021:9000
+    networks:
+      app_network:
+        ipv4_address: 192.159.0.19
+#  portainer:
+#    image: portainer/portainer
+#    restart: always
+#    volumes:
+#    - '/var/run/docker.sock:/var/run/docker.sock'
+#    expose:
+#    - 9000
+#    ports:
+#    - 9010:9000
+#    networks:
+#      app_network:
+#        ipv4_address: 192.159.0.14
+#    container_name: portainerm
+networks:
+  app_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 192.159.0.0/24

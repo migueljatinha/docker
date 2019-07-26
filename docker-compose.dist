@@ -1,0 +1,108 @@
+version: '2'
+services:
+  web:
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./code:/var/www/html    
+      - ./conf/nginx/seller.conf:/etc/nginx/conf.d/seller.conf
+      - ./conf/nginx/api.conf:/etc/nginx/conf.d/api.conf
+      - ./conf/ambiente/hosts:/etc/hosts
+      - ./conf/log:/var/log/seller
+      - ./conf/cert/alice.crt:/etc/nginx/ssl/alice.crt
+      - ./conf/cert/alice.key:/etc/nginx/ssl/alice.key
+    depends_on:
+      - sellercenter
+    links:
+      - database
+      - redis
+    networks:
+      app_seller:
+        ipv4_address: 192.159.0.10
+    container_name: nginxseller
+  database:
+    image: mysql:5.6
+    container_name: seller_database
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      app_seller:
+        ipv4_address: 192.159.0.11
+    command: mysqld --sql_mode='' --max_allowed_packet=512M --innodb_buffer_pool_size=512M --innodb_flush_log_at_trx_commit=0
+  redis:
+    image: redis
+    container_name: seller_redis
+    ports:
+      - "6379:6379"
+    networks:
+      app_seller:
+        ipv4_address: 192.159.0.12
+  sellercenter:
+    build: ./dockerfiles/php71
+    container_name: sellercenter
+    volumes:
+      - ./code:/var/www/html
+      - ./conf/log/:/var/log/bobalice
+      - ./conf/bash_history:/root/.bash_history
+      - ./conf/.bash_history_master:/home/master/.bash_history
+      - ./conf/php/php-dev.ini:/usr/local/etc/php/php.ini
+      - ./conf/ambiente/hosts:/etc/hosts
+    working_dir: /var/www/html/tml
+    networks:
+      app_seller:
+        ipv4_address: 192.159.0.13
+        aliases:
+          - seller.com.local
+    environment:
+      - PHP_IDE_CONFIG=serverName=docker
+      - XDEBUG_CONFIG=idekey=PHPSTORM
+      - VIRTUAL_HOST=sc.${DEVBOX_NAME}.local,sc-api.${DEVBOX_NAME}.local,cdn.${DEVBOX_NAME}.local
+      - APPLICATION_ENV=development
+    depends_on:
+      - database
+    expose:
+     - 9000
+     - 4730
+    ports:
+     - 9020:9000
+    links:
+     - gearserver
+ gearserver:
+   image: artefactual/gearmand:latest
+   environment:
+     - PHP_IDE_CONFIG=serverName=docker
+     - XDEBUG_CONFIG=idekey=PHPSTORM
+     - APPLICATION_ENV=development
+   expose:
+     - 4730
+     - 9000
+   networks:
+     app_seller:
+       ipv4_address: 192.159.0.18
+   container_name: gearserver
+  ui:
+    image: portainer/portainer
+    restart: always
+    volumes:
+    - '/var/run/docker.sock:/var/run/docker.sock'
+    expose:
+    - 9000
+    ports:
+    - "9010:9000"
+    networks:
+      app_seller:
+        ipv4_address: 192.159.0.14
+    container_name: portainerm
+networks:
+  app_seller:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+      - subnet: 192.159.0.0/24
